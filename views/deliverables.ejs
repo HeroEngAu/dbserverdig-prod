@@ -1034,6 +1034,7 @@
                                         data: params,
                                         success: function(data) {
                                                 updateTrTable(data.transmittals);
+						addRowsToTable(data.deliverables);
                                                 returnTransmittalModalClose();
                                         },
                                         error: function(xhr, status, error) {
