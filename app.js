@@ -113,8 +113,17 @@ app.post('/return-transmittal-save', async (req, res) => {
                         transmittal.transmitted_documents = formattedItems;
                         return transmittal;
                 });
+                const updatedDeliverablesQuery = "SELECT * FROM deliverables LEFT JOIN (SELECT rev.docno, revisions.id as revid, rev.revid as rev, revisions.revdate, max(revisions.subrev) as subrev, revisions.revdesc, revisions.schedate, revisions.issuedate, revisions.expretdate, revisions.returndate, IF(revisions.returndate <> '0000-00-00', 1, 0) AS complete, IF((revisions.expretdate <= curdate() AND revisions.returndate = '0000-00-00' AND revisions.expretdate <> '0000-00-00') OR (revisions.schedate <= curdate() AND revisions.issuedate = '0000-00-00'	 AND revisions.schedate <> '0000-00-00'), 1, 0) AS overdue FROM (SELECT DISTINCT docno, max(id) as id, max(revid) AS revid	FROM revisions GROUP BY docno) AS rev LEFT JOIN revisions USING (docno, id) GROUP BY rev.docno) AS r USING (docno)";
+                const [updatedDeliverables] = await pdConnection.query(updatedDeliverablesQuery);
+                const ModifiedupdatedDeliverables = updatedDeliverables.map((deliverable) => {
+                        deliverable.rev = String(deliverable.rev).substring(0, 1);
+                        deliverable.rev = rev(parseInt(deliverable.rev));
+                        return deliverable;
+                });
+
                 res.status(200).json({
-                        transmittals: modifiedResultTrans
+                        transmittals: modifiedResultTrans,
+                        deliverables: ModifiedupdatedDeliverables
                 })
         } catch (error) {
                 console.error(`Error: ${error.message}`);
@@ -166,7 +175,7 @@ app.post('/transmittal-details', async (req, res) => {
                 // Second query to fetch deliverables
                 const pdqueryDeliverables = "SELECT * FROM deliverables LEFT JOIN (SELECT rev.docno, revisions.id as revid, rev.revid as rev, revisions.revdate, max(revisions.subrev) as subrev, revisions.revdesc, revisions.issuedate FROM (SELECT DISTINCT docno, max(id) AS id, max(revid) AS revid FROM revisions GROUP BY docno) AS rev LEFT JOIN revisions USING (docno, id) GROUP BY rev.docno) AS r USING (docno) WHERE issuedate = '0000-00-00'";
                 const pdresultDeliverables = await pdConnection.query(pdqueryDeliverables);
-                console.log(pdresultDeliverables);
+                
                 // Filter deliverables based on transdel
                 const trIssued_Addel = pdresultDeliverables[0].filter(del => !(del['docno'] in transdel)).map(trIssued => {
                         trIssued.rev = rev(parseInt(trIssued.rev));
@@ -1267,216 +1276,216 @@ app.post('/view-pdf', async (req, res) => {
         const projno = req.body.projdb;
         const units = 2.85;
         try {
-                const existingPdfBytes = await fs.readFile("public/transmittal-template.pdf");
-                const pdfDoc = await PDFDocument.load(existingPdfBytes);
-                // Register fontkit instance
-                pdfDoc.registerFontkit(fontkit);
-                // Embed custom font
-                const fontBytes = await fs.readFile("public/font/times new roman.ttf");
-                const customFont = await pdfDoc.embedFont(fontBytes);
-                const page = pdfDoc.getPages()[0];
-                const height = page.getSize().height;
-                const width = page.getSize().width;
-                const pdquery = await pdConnection.query(`SELECT t.docno AS trno, t.docname AS trname, t.issuedate, t.expretdate, t.returndate, t.transmitto, t.herocontact, t.issuedvia, t.approval, t.closeout, t.construction, t.information, t.quotation, t.tender, t.remarks, td.docno AS docno, d.clientno AS clientno, d.docname AS docname, CONCAT(r.revid,IFNULL(r.subrev,'')) AS rev, td.revid AS revid FROM ((transmittals AS t LEFT JOIN transdel AS td ON t.docno = td.trandocno) LEFT JOIN deliverables AS d ON d.docno=td.docno) LEFT JOIN revisions AS r ON td.revid = r.id WHERE t.docno = '${docno}'`);
-                for (let index = 0; index < pdquery[0].length; index++) {
-                        const modification = pdquery[0][index];
-                        const pageIdx = index % 24;
-                        if (modification && typeof modification === "object") {
-                                if (pageIdx === 0) {
-                                        page.setFont(customFont);
-                                        pdfDoc.setTitle(projno.replace(/"/g, '').toUpperCase() + "-" + modification.trno);
-                                        pdfDoc.setAuthor(modification.herocontact);
-                                        pdfDoc.setSubject(
-                                                "Transmittal " +
-                                                modification.trno +
-                                                " to " +
-                                                modification.transmitto +
-                                                " via " +
-                                                modification.issuedvia +
-                                                " on " +
-                                                modification.issuedate.replace(/-/g, "/")
-                                        );
-                                        pdfDoc.setCreator("Hero Engineering Project Database");
-                                        if (modification.cancelled === 1 && modification.cancelled) {
-                                                page.drawText("CANCELLED", {
-                                                        x: 0,
-                                                        y: 0,
-                                                        size: 32,
-                                                        font: customFont,
-                                                        color: rgb(255, 0, 0),
-                                                });
-                                        }
-                                        page.drawText("Page " + (index + 1) + " of " + "1", {
-                                                x: (width / 2) * units,
-                                                y: 50 * units,
-                                                size: 8,
-                                                font: customFont,
-                                                color: rgb(0, 0, 0),
-                                        });
-                                        page.drawText(projno.replace(/"/g, '').substring(3, projno.replace(/"/g, '').length).toUpperCase() + "-" + modification.trno.toUpperCase(), {
-                                                x: 110 * units,
-                                                y: (height - 43 * units),
-                                                size: 8,
-                                                font: customFont,
-                                                color: rgb(0, 0, 0),
-                                        });
-                                        page.drawText(modification.issuedate.replace(/-/g, '/'), {
-                                                x: 110 * units,
-                                                y: height - 51 * units,
-                                                size: 8,
-                                                font: customFont,
-                                                color: rgb(0, 0, 0),
-                                                width: 75,
-                                        });
-                                        page.drawText(modification.transmitto, {
-                                                x: 24 * units,
-                                                y: height - 63 * units,
-                                                size: 8,
-                                                font: customFont,
-                                                color: rgb(0, 0, 0),
-                                                lineHeight: 4.225,
-                                                width: 79,
-                                        });
-                                        page.drawText(modification.herocontact, {
-                                                x: 103.5 * units,
-                                                y: height - 65 * units,
-                                                size: 8,
-                                                font: customFont,
-                                                color: rgb(0, 0, 0),
-                                        });
-                                        page.drawText(modification.issuedvia, {
-                                                x: 24 * units,
-                                                y: height - 87 * units,
-                                                size: 8,
-                                                font: customFont,
-                                                color: rgb(0, 0, 0),
-                                                lineHeight: 4.225,
-                                        });
-                                        if (modification.approval === 1) {
-                                                page.drawText("X", {
-                                                        x: 105 * units,
-                                                        y: height - 89 * units,
-                                                        size: 8,
-                                                        font: customFont,
-                                                        color: rgb(0, 0, 0),
-                                                });
-                                        }
-                                        if (modification.closeout === 1) {
-                                                page.drawText("X", {
-                                                        x: 131 * units,
-                                                        y: height - 89 * units,
-                                                        size: 8,
-                                                        font: customFont,
-                                                        color: rgb(0, 0, 0),
-                                                });
-                                        }
-                                        if (modification.construction === 1) {
-                                                page.drawText("X", {
-                                                        x: 156 * units,
-                                                        y: height - 89 * units,
-                                                        size: 8,
-                                                        font: customFont,
-                                                        color: rgb(0, 0, 0),
-                                                });
-                                        }
-                                        if (modification.information === 1) {
-                                                page.drawText("X", {
-                                                        x: 104 * units,
-                                                        y: height - 96 * units,
-                                                        size: 8,
-                                                        font: customFont,
-                                                        color: rgb(0, 0, 0),
-                                                });
-                                        }
-                                        if (modification.quotation === 1) {
-                                                page.drawText("X", {
-                                                        x: 131 * units,
-                                                        y: height - 96 * units,
-                                                        size: 8,
-                                                        font: customFont,
-                                                        color: rgb(0, 0, 0),
-                                                });
-                                        }
-                                        if (modification.tender === 1) {
-                                                page.drawText("X", {
-                                                        x: 156 * units,
-                                                        y: height - 96 * units,
-                                                        size: 8,
-                                                        font: customFont,
-                                                        color: rgb(0, 0, 0),
-                                                });
-                                        }
-                                        const remarksText = "Respond by: " + modification.expretdate.replace(/-/g, "/");
-                                        page.drawText(remarksText, {
-                                                x: 24 * units,
-                                                y: height - 219 * units,
-                                                size: 8,
-                                                font: customFont,
-                                                color: rgb(0, 0, 0),
-                                        });
-                                }
-                                const v = [
-                                        modification.rev,
-                                        modification.revid,
-                                        modification.docname,
-                                ];
-                                const k =
-                                        modification.clientno !== null && modification.clientno !== '' ?
-                                        modification.clientno :
-                                        projno.replace(/"/g, '').toUpperCase().substring(3, projno.replace(/"/g, '').toUpperCase().length) + "-" + (modification.docno !== null && modification.docno !== '' ? modification.docno : '');
-                                const j = 111 + index * 4.225;
-                                page.drawText(String(index + 1), {
-                                        x: 30 * units,
-                                        y: height - j * units,
-                                        size: 7,
-                                        font: customFont,
-                                        color: rgb(0, 0, 0),
-                                        textAlign: 'center'
-                                });
-                                page.drawText(k, {
-                                        x: 40 * units,
-                                        y: height - j * units,
-                                        size: 7,
-                                        font: customFont,
-                                        color: rgb(0, 0, 0),
-                                        textAlign: 'center'
-                                });
-                                page.drawText(v[0] !== '' && v[0] !== null ? rev(parseInt(v[0].substring(0, 1)))[0] + v[0].substring(1) : '-', {
-                                        x: 92 * units,
-                                        y: height - j * units,
-                                        size: 7,
-                                        font: customFont,
-                                        color: rgb(0, 0, 0),
-                                        textAlign: 'center'
-                                });
-                                const maxLength = 50;
-                                let textToDisplay = modification.docname || '-';
-                                if (textToDisplay.length > maxLength) {
-                                        textToDisplay = textToDisplay.substring(0, maxLength - 3) + "...";
-                                }
-                                page.drawText(textToDisplay, {
-                                        x: 104.5 * units,
-                                        y: height - j * units,
-                                        size: 7,
-                                        font: customFont,
-                                        color: rgb(0, 0, 0),
-                                        textAlign: 'center'
-                                });
+            // Load the existing PDF template
+            const existingPdfBytes = await fs.readFile("public/transmittal-template.pdf");
+            const pdfDoc = await PDFDocument.load(existingPdfBytes);
+    
+            // Register fontkit and embed the custom font
+            pdfDoc.registerFontkit(fontkit);
+            const fontBytes = await fs.readFile("public/font/times new roman.ttf");
+            const customFont = await pdfDoc.embedFont(fontBytes);
+    
+            // Query the database for data
+            const pdquery = await pdConnection.query(`SELECT t.docno AS trno, t.docname AS trname, t.issuedate, t.expretdate, t.returndate, t.transmitto, t.herocontact, t.issuedvia, t.approval, t.closeout, t.construction, t.information, t.quotation, t.tender, t.remarks, td.docno AS docno, d.clientno AS clientno, d.docname AS docname, CONCAT(r.revid,IFNULL(r.subrev,'')) AS rev, td.revid AS revid FROM ((transmittals AS t LEFT JOIN transdel AS td ON t.docno = td.trandocno) LEFT JOIN deliverables AS d ON d.docno=td.docno) LEFT JOIN revisions AS r ON td.revid = r.id WHERE t.docno = '${docno}'`);
+    
+            const totalRecords = pdquery[0].length;
+            const totalPages = Math.floor(totalRecords / 24);
+            
+            // Copy pages from the existing PDF to the new document
+            for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+                const copiedPage = await pdfDoc.copyPages(pdfDoc, [0]);
+                pdfDoc.addPage(copiedPage[0]);
+            }
+    
+            // Now, modify the copied pages with data
+            const itemsPerPage = 24; // Total items per page
+            const startingY = (height) => height - 111 * units; // Starting Y position for the first item on each page
+            const itemHeight = 4.225 * units; // Height between each item
+    
+            for (let index = 0; index < pdquery[0].length; index++) {
+                const modification = pdquery[0][index];
+                const pageIdx = Math.floor(index / itemsPerPage); // Determine the current page index
+                const page = pdfDoc.getPages()[pageIdx]; // Get the copied page to modify
+                const { height, width } = page.getSize();
+    
+                if (modification && typeof modification === "object") {
+                    // Draw headers or titles on the first record of each new page
+                    if (index % itemsPerPage === 0) {
+                        pdfDoc.setTitle(`${projno.replace(/"/g, '').toUpperCase()}-${modification.trno}`);
+                        pdfDoc.setAuthor(modification.herocontact);
+                        pdfDoc.setSubject(`Transmittal ${modification.trno} to ${modification.transmitto} via ${modification.issuedvia} on ${modification.issuedate.replace(/-/g, "/")}`);
+                        pdfDoc.setCreator("Hero Engineering Project Database");
+    
+                        // Draw "CANCELLED" if applicable
+                        if (modification.cancelled === 1) {
+                            page.drawText("CANCELLED", {
+                                x: 0,
+                                y: 0,
+                                size: 32,
+                                font: customFont,
+                                color: rgb(255, 0, 0),
+                            });
                         }
+    
+                        // Draw page number
+                        page.drawText(`Page ${pageIdx + 1} of ${totalPages}`, {
+                            x: (width / 2) * units,
+                            y: 50 * units,
+                            size: 8,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+    
+                    // Common drawing logic for modifications on the page
+                    page.drawText(`${projno.replace(/"/g, '').substring(3).toUpperCase()}-${modification.trno.toUpperCase()}`, {
+                        x: 110 * units,
+                        y: (height - 43 * units),
+                        size: 8,
+                        font: customFont,
+                        color: rgb(0, 0, 0),
+                    });
+    
+                    // Draw additional text based on fields
+                    page.drawText(modification.issuedate.replace(/-/g, '/'), {
+                        x: 110 * units,
+                        y: height - 51 * units,
+                        size: 8,
+                        font: customFont,
+                        color: rgb(0, 0, 0),
+                    });
+    
+                    page.drawText(modification.transmitto, {
+                        x: 24 * units,
+                        y: height - 63 * units,
+                        size: 8,
+                        font: customFont,
+                        color: rgb(0, 0, 0),
+                        lineHeight: 4.225,
+                        width: 79,
+                    });
+    
+                    page.drawText(modification.herocontact, {
+                        x: 103.5 * units,
+                        y: height - 65 * units,
+                        size: 8,
+                        font: customFont,
+                        color: rgb(0, 0, 0),
+                    });
+    
+                    page.drawText(modification.issuedvia, {
+                        x: 24 * units,
+                        y: height - 87 * units,
+                        size: 8,
+                        font: customFont,
+                        color: rgb(0, 0, 0),
+                        lineHeight: 4.225,
+                    });
+    
+                    // Draw "X" if applicable for approval/checkboxes
+                    if (modification.approval === 1) {
+                        page.drawText("X", {
+                            x: 105 * units,
+                            y: height - 89 * units,
+                            size: 8,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+                    if (modification.closeout === 1) {
+                        page.drawText("X", {
+                            x: 131 * units,
+                            y: height - 89 * units,
+                            size: 8,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+                    if (modification.construction === 1) {
+                        page.drawText("X", {
+                            x: 156 * units,
+                            y: height - 89 * units,
+                            size: 8,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+                    if (modification.information === 1) {
+                        page.drawText("X", {
+                            x: 104 * units,
+                            y: height - 96 * units,
+                            size: 8,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+                    if (modification.quotation === 1) {
+                        page.drawText("X", {
+                            x: 131 * units,
+                            y: height - 96 * units,
+                            size: 8,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+                    if (modification.tender === 1) {
+                        page.drawText("X", {
+                            x: 156 * units,
+                            y: height - 96 * units,
+                            size: 8,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+    
+                    const remarksText = "Respond by: " + modification.expretdate.replace(/-/g, "/");
+                    page.drawText(remarksText, {
+                        x: 24 * units,
+                        y: height - 219 * units,
+                        size: 8,
+                        font: customFont,
+                        color: rgb(0, 0, 0),
+                    });
+    
+                    // Record details positioning
+                    const k = modification.clientno || `${projno.replace(/"/g, '').toUpperCase().substring(3)}-${modification.docno || ''}`;
+                    const recordIndexOnPage = index % itemsPerPage; // Index for the current page
+                    const yPosition = startingY(height) - (recordIndexOnPage * itemHeight); // Y position for the current record
+    
+                    const details = [
+                        { text: String(index + 1), x: 30, y: yPosition },
+                        { text: k, x: 40, y: yPosition },
+                        { text: modification.rev || '-', x: 92, y: yPosition },
+                        { text: (modification.docname || '-').substring(0, 50) + (modification.docname.length > 50 ? '...' : ''), x: 104.5, y: yPosition }
+                    ];
+    
+                    details.forEach(({ text, x, y }) => {
+                        page.drawText(text, {
+                            x: x * units,
+                            y,
+                            size: 7,
+                            font: customFont,
+                            color: rgb(0, 0, 0),
+                            textAlign: 'center'
+                        });
+                    });
                 }
-                // Serialize the modified PDF document to bytes
-                const modifiedPdfBytes = await pdfDoc.save();
-                // Set the response headers for downloading
-                res.setHeader('Content-Type', 'application/pdf');
-                res.setHeader('Content-Disposition', `attachment; filename="transmittal-${docno}.pdf"`);
-                // Send the modified PDF bytes for download
-                res.end(modifiedPdfBytes, 'binary');
+            }
+    
+            // Serialize the modified PDF document to bytes
+            const modifiedPdfBytes = await pdfDoc.save();
+    
+            // Set the response headers for downloading
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="transmittal-${docno}.pdf"`);
+    
+            // Send the modified PDF bytes for download
+            res.end(modifiedPdfBytes, 'binary');
         } catch (error) {
-                console.error(`Error: ${error.message}`);
-                res.status(500).send('Internal Server Error');
+            console.error(`Error: ${error.message}`);
+            res.status(500).send('Internal Server Error');
         }
-});
-app.post('/return-deliverable', async (req, res) => {
+    });app.post('/return-deliverable', async (req, res) => {
         const docno = req.body.docno;
         try {
                 const query = "SELECT d.docno, CONCAT(r.revid,IFNULL(r.subrev,'')) AS rev, r.id as revid, d.docname as docname, r.issuedate as issuedate FROM (revisions AS r LEFT JOIN deliverables AS d USING (docno)) WHERE r.issuedate != '0000-00-00' AND r.returndate = '0000-00-00'";
