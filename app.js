@@ -79,11 +79,14 @@ app.post('/return-transmittal-save', async (req, res) => {
                                         transmittal.rev = transmittal.rev.split('<br>');
                                         for (let i = 0; i < transmittal.rev.length; i++) {
                                                 transmittal.rev[i] = rev(parseInt(transmittal.rev[i].substring(0, 1)))[0];
+                                                transmittal.subrev[i] = transmittal.rev[i].length > 1?transmittal.rev[i].substring(1, transmittal.rev[i].length):null;
                                         }
                                 } else {
                                         transmittal.rev = [rev(parseInt(transmittal.rev.substring(0, 1)))];
+                                        transmittal.subrev = transmittal.rev.length > 1 ? transmittal.rev.substring(1, transmittal.rev.length): null;
                                 }
                                 transmittal.rev = transmittal.rev.flat();
+                                transmittal.subrev = transmittal.subrev.flat();
                         } else {
                                 transmittal.rev = [''];
                         }
@@ -105,7 +108,7 @@ app.post('/return-transmittal-save', async (req, res) => {
                                 // Check if any of the properties are empty for the current index
                                 if (transmittal.docno[i] && transmittal.rev[i] && transmittal.docname[i]) {
                                         // If all properties are not empty, format the string and push it to formattedItems
-                                        const formattedString = `${transmittal.docno[i]} - r.${transmittal.rev[i]} - ${transmittal.docname[i]}`;
+                                        const formattedString = `${transmittal.docno[i]} - r.${transmittal.rev[i]} ${transmittal.subrev[i]?transmittal.subrev[i]:""} - ${transmittal.docname[i]}`;
                                         formattedItems.push(formattedString);
                                 }
                         }
@@ -150,7 +153,7 @@ app.post('/return-transmittal-details', async (req, res) => {
                         }
                         // Construct the description using docno, rev, and docname
                         trIssued.desc = (trIssued.docno !== null && trIssued.rev !== null && trIssued.docname !== null) ?
-                                trIssued.docno + "-" + "r." + trIssued.rev + "-" + trIssued.docname : '';
+                                trIssued.docno + "-" + "r." + trIssued.rev + "-" +  trIssued.docname : '';
                         return trIssued;
                 });
                 res.status(200).json({
@@ -538,6 +541,7 @@ app.post('/update-transmittal', async (req, res) => {
                                         transmittal.rev = transmittal.rev.split('<br>');
                                         for (let i = 0; i < transmittal.rev.length; i++) {
                                                 transmittal.rev[i] = rev(parseInt(transmittal.rev[i].substring(0, 1)))[0];
+                                                transmittal.subrev[i] = transmittal.rev[i].length > 1
                                         }
                                 } else {
                                         transmittal.rev = [rev(parseInt(transmittal.rev.substring(0, 1)))];
@@ -1167,11 +1171,14 @@ app.post('/add-transmittal', async (req, res) => {
                                         transmittal.rev = transmittal.rev.split('<br>');
                                         for (let i = 0; i < transmittal.rev.length; i++) {
                                                 transmittal.rev[i] = rev(parseInt(transmittal.rev[i].substring(0, 1)))[0];
+                                                transmittal.subrev[i] = transmittal.rev[i].length >1?transmittal.rev[i].substring(1,transmittal.rev[i].length):null;
                                         }
                                 } else {
                                         transmittal.rev = [rev(parseInt(transmittal.rev.substring(0, 1)))];
+                                        transmittal.subrev = transmittal.rev.length > 1 ? transmittal.rev.substring(1,transmittal.rev.length): null;
                                 }
                                 transmittal.rev = transmittal.rev.flat();
+                                transmittal.subrev = transmittal.subrev.flat();
                         } else {
                                 transmittal.rev = [''];
                         }
@@ -1192,6 +1199,10 @@ app.post('/add-transmittal', async (req, res) => {
                         for (let i = 0; i < transmittal.docno.length; i++) {
                                 // Check if any of the properties are empty for the current index
                                 if (transmittal.docno[i] && transmittal.rev[i] && transmittal.docname[i]) {
+                                        if(transmittal.rev[i].length > 1) {
+                                        const formattedString = `${transmittal.docno[i]} - r.${transmittal.rev[i]}${transmittal.subrev[i]} - ${transmittal.docname[i]}`;
+                                        formattedItems.push(formattedString);     
+                                        }
                                         // If all properties are not empty, format the string and push it to formattedItems
                                         const formattedString = `${transmittal.docno[i]} - r.${transmittal.rev[i]} - ${transmittal.docname[i]}`;
                                         formattedItems.push(formattedString);
@@ -1448,14 +1459,14 @@ app.post('/view-pdf', async (req, res) => {
                     });
     
                     // Record details positioning
-                    const k = modification.clientno || `${projno.replace(/"/g, '').toUpperCase().substring(3)}-${modification.docno || ''}`;
+                    const k = modification.docno || `${projno.replace(/"/g, '').toUpperCase().substring(3)}-${modification.docno || ''}`;
                     const recordIndexOnPage = index % itemsPerPage; // Index for the current page
                     const yPosition = startingY(height) - (recordIndexOnPage * itemHeight); // Y position for the current record
-    
+                    console.log("The records are: ", modification);
                     const details = [
                         { text: String(index + 1), x: 30, y: yPosition },
                         { text: k, x: 40, y: yPosition },
-                        { text: modification.rev || '-', x: 92, y: yPosition },
+                        { text: rev(parseInt(modification.rev.substring(0,1)))[0] + (modification.rev.length > 1?modification.rev.substring(1, modification.rev.legth):"") || '-', x: 92, y: yPosition },
                         { text: (modification.docname || '-').substring(0, 50) + (modification.docname.length > 50 ? '...' : ''), x: 104.5, y: yPosition }
                     ];
     
