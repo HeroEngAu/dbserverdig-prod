@@ -1034,7 +1034,6 @@
                                         data: params,
                                         success: function(data) {
                                                 updateTrTable(data.transmittals);
-						addRowsToTable(data.deliverables);
                                                 returnTransmittalModalClose();
                                         },
                                         error: function(xhr, status, error) {
@@ -1420,6 +1419,7 @@
                                 tableBody.empty(); // Clear existing table rows
                                 // Iterate over each transmittal and generate HTML for each row
                                 transmittals.forEach(function(transmittal) {
+                                        
                                         var rowClass = '';
                                         if (transmittal.complete) {
                                                 rowClass += ' completed';
@@ -1435,27 +1435,27 @@
                                         }
                                         // Generate HTML for main row
                                         var row = `<tr class="clickable-row${rowClass}" 
-                                   data-trno="${transmittal.trno}" 
-                                   data-trname="${transmittal.trname}" 
-                                   data-complete="${transmittal.complete}" 
-                                   data-cancelled="${transmittal.cancelled}" 
-                                   data-issuedate="${transmittal.issuedate}" 
-                                   data-expretdate="${transmittal.expretdate}" 
-                                   data-transmitto="${transmittal.transmitto}" 
-                                   data-herocontact="${transmittal.herocontact}" 
-                                   data-issuedvia="${transmittal.issuedvia}" 
-                                   data-approval="${transmittal.approval}" 
-                                   data-closeout="${transmittal.closeout}" 
-                                   data-construction="${transmittal.construction}" 
-                                   data-information="${transmittal.information}" 
-                                   data-quotation="${transmittal.quotation}" 
-                                   data-tender="${transmittal.tender}" 
-                                   data-remarks="${transmittal.remarks}" 
-                                   data-transmitted_documents="${transmittal.transmitted_documents}" 
-                                   data-docno="${transmittal.docno}" 
-                                   data-docname="${transmittal.docname}" 
-                                   data-rev="${transmittal.rev}" 
-                                   data-desc="${transmittal.desc}">
+                                                data-trno="${transmittal.trno}" 
+                                                data-trname="${transmittal.trname}" 
+                                                data-complete="${transmittal.complete}" 
+                                                data-cancelled="${transmittal.cancelled}" 
+                                                data-issuedate="${transmittal.issuedate}" 
+                                                data-expretdate="${transmittal.expretdate}" 
+                                                data-transmitto="${transmittal.transmitto}" 
+                                                data-herocontact="${transmittal.herocontact}" 
+                                                data-issuedvia="${transmittal.issuedvia}" 
+                                                data-approval="${transmittal.approval}" 
+                                                data-closeout="${transmittal.closeout}" 
+                                                data-construction="${transmittal.construction}" 
+                                                data-information="${transmittal.information}" 
+                                                data-quotation="${transmittal.quotation}" 
+                                                data-tender="${transmittal.tender}" 
+                                                data-remarks="${transmittal.remarks}" 
+                                                data-transmitted_documents="${transmittal.transmitted_documents}" 
+                                                data-docno="${transmittal.docno}" 
+                                                data-docname="${transmittal.docname}" 
+                                                data-rev="${transmittal.rev}" 
+                                                data-desc="${transmittal.desc}">
                                       <td id="transmittal_number">${transmittal.trno}</td>
                                       <td id="transmittal_name">${transmittal.trname}</td>
                                       <td id="transmittal_issuedate">${transmittal.issuedate === '0000-00-00' ? '-' : transmittal.issuedate}</td>
@@ -1464,6 +1464,7 @@
                                   </tr>`;
                                         // Generate HTML for subrow
                                         var subRow = `<tr class="subrow">
+                        <td></td>                   
                             <td>
                                 <div style="display: inline-block; padding-right: 5px;">
                                     <button id="view-pdf-button" class="btn">View PDF...</button>
@@ -1491,6 +1492,7 @@
                                 });
                                 // Re-attach event handlers to new rows
                                 attachClickableRowEvent();
+                                attachEventListenerPDF();
                                 attachEventListener();
                         }
 
